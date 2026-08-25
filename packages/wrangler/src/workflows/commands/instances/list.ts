@@ -3,7 +3,11 @@ import { createCommand } from "../../../core/create-command";
 import { logger } from "../../../logger";
 import { requireAuth } from "../../../user";
 import { fetchLocalResult, localWorkflowArgs } from "../../local";
-import { emojifyInstanceStatus, validateStatus } from "../../utils";
+import {
+	emojifyInstanceStatus,
+	jsonWorkflowArgs,
+	validateStatus,
+} from "../../utils";
 import type { Instance } from "../../types";
 
 export const workflowsInstancesListCommand = createCommand({
@@ -16,6 +20,7 @@ export const workflowsInstancesListCommand = createCommand({
 	positionalArgs: ["name"],
 	args: {
 		...localWorkflowArgs,
+		...jsonWorkflowArgs,
 		name: {
 			describe: "Name of the workflow",
 			type: "string",
@@ -42,6 +47,9 @@ export const workflowsInstancesListCommand = createCommand({
 			type: "number",
 		},
 	},
+	behaviour: {
+		printBanner: (args) => !args.json,
+	},
 
 	async handler(args, { config }) {
 		if (args.local) {
@@ -65,6 +73,17 @@ export const workflowsInstancesListCommand = createCommand({
 				Array<{ id: string; status?: string; created_on?: string }>
 			>(args.port, path);
 
+			const sortedInstances = instances.sort((a, b) =>
+				args.reverse
+					? (a.created_on ?? "").localeCompare(b.created_on ?? "")
+					: (b.created_on ?? "").localeCompare(a.created_on ?? "")
+			);
+
+			if (args.json) {
+				logger.json(sortedInstances);
+				return;
+			}
+
 			if (instances.length === 0 && args.page === 1) {
 				logger.warn(
 					`There are no instances in workflow "${args.name}". You can trigger it with "wrangler workflows trigger ${args.name} --local"`
@@ -81,12 +100,6 @@ export const workflowsInstancesListCommand = createCommand({
 
 			logger.info(
 				`Showing ${instances.length} instance${instances.length > 1 ? "s" : ""} from page ${args.page}:`
-			);
-
-			const sortedInstances = instances.sort((a, b) =>
-				args.reverse
-					? (a.created_on ?? "").localeCompare(b.created_on ?? "")
-					: (b.created_on ?? "").localeCompare(a.created_on ?? "")
 			);
 
 			const prettierInstances = sortedInstances.map((instance) => ({
@@ -125,6 +138,17 @@ export const workflowsInstancesListCommand = createCommand({
 				URLParams
 			);
 
+			const sortedInstances = instances.sort((a, b) =>
+				args.reverse
+					? a.created_on.localeCompare(b.created_on)
+					: b.created_on.localeCompare(a.created_on)
+			);
+
+			if (args.json) {
+				logger.json(sortedInstances);
+				return;
+			}
+
 			if (instances.length === 0 && args.page === 1) {
 				logger.warn(
 					`There are no instances in workflow "${args.name}". You can trigger it with "wrangler workflows trigger ${args.name}"`
@@ -143,19 +167,13 @@ export const workflowsInstancesListCommand = createCommand({
 				`Showing ${instances.length} instance${instances.length > 1 ? "s" : ""} from page ${args.page}:`
 			);
 
-			const prettierInstances = instances
-				.sort((a, b) =>
-					args.reverse
-						? a.created_on.localeCompare(b.created_on)
-						: b.created_on.localeCompare(a.created_on)
-				)
-				.map((instance) => ({
-					"Instance ID": instance.id,
-					Version: instance.version_id,
-					Created: new Date(instance.created_on).toLocaleString(),
-					Modified: new Date(instance.modified_on).toLocaleString(),
-					Status: emojifyInstanceStatus(instance.status),
-				}));
+			const prettierInstances = sortedInstances.map((instance) => ({
+				"Instance ID": instance.id,
+				Version: instance.version_id,
+				Created: new Date(instance.created_on).toLocaleString(),
+				Modified: new Date(instance.modified_on).toLocaleString(),
+				Status: emojifyInstanceStatus(instance.status),
+			}));
 
 			logger.table(prettierInstances);
 		}
